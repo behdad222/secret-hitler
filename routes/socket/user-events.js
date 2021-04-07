@@ -503,7 +503,7 @@ const updateSeatedUser = (socket, passport, data) => {
 	Account.findOne({ username: passport.user }).then(account => {
 		const isNotMaxedOut = game.publicPlayersState.length < game.general.maxPlayersCount;
 		const isNotInGame = !game.publicPlayersState.find(player => player.userName === passport.user);
-		const isRainbowSafe = !game.general.rainbowgame || (game.general.rainbowgame && account.wins + account.losses > 49);
+		const isRainbowSafe = !game.general.rainbowgame || (game.general.rainbowgame && account.wins + account.losses > 4);
 		const isPrivateSafe =
 			!game.general.private ||
 			(game.general.private && (data.password === game.private.privatePassword || game.general.whitelistedPlayers.includes(passport.user)));
@@ -716,7 +716,7 @@ module.exports.handleAddNewGame = (socket, passport, data) => {
 			lastModPing: 0,
 			chatReplTime: Array(chatReplacements.length + 1).fill(0),
 			disableGamechat: data.disableGamechat,
-			rainbowgame: user.wins + user.losses > 49 ? data.rainbowgame : false,
+			rainbowgame: user.wins + user.losses > 4 ? data.rainbowgame : false,
 			blindMode: data.blindMode,
 			timedMode: typeof data.timedMode === 'number' && data.timedMode >= 2 && data.timedMode <= 6000 ? data.timedMode : false,
 			flappyMode: data.flappyMode,

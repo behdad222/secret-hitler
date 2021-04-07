@@ -10,13 +10,13 @@ export default class Creategame extends React.Component {
 	constructor(props) {
 		super(props);
 
-		let isRainbow = false;
+		let isRainbow = true;
 		let user;
 		if (this.props.userList.list) {
 			user = this.props.userList.list.find(user => user.userName === this.props.userInfo.userName);
 		}
 		if (user) {
-			isRainbow = user.wins + user.losses > 49;
+			isRainbow = user.wins + user.losses > 4;
 		}
 
 		this.state = {
@@ -555,13 +555,13 @@ export default class Creategame extends React.Component {
 	}
 
 	presetSelector(preset) {
-		let isRainbow = false;
+		let isRainbow = true;
 		let user;
 		if (this.props.userList.list) {
 			user = this.props.userList.list.find(user => user.userName === this.props.userInfo.userName);
 		}
 		if (user) {
-			isRainbow = user.wins + user.losses > 49;
+			isRainbow = user.wins + user.losses > 4;
 		}
 
 		switch (preset) {
@@ -2026,13 +2026,13 @@ export default class Creategame extends React.Component {
 							/>
 						</div>
 						{(() => {
-							let isRainbow = false;
+							let isRainbow = true;
 							let user;
 							if (this.props.userList.list) {
 								user = this.props.userList.list.find(user => user.userName === this.props.userInfo.userName);
 							}
 							if (user) {
-								isRainbow = user.wins + user.losses > 49;
+								isRainbow = user.wins + user.losses > 4;
 							}
 							if (isRainbow) {
 								return (
