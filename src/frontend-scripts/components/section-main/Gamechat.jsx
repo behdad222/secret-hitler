@@ -529,14 +529,14 @@ class Gamechat extends React.Component {
 		}
 
 		if (userInfo.isSeated) {
-			if (isDead && !gameState.isCompleted) {
+			if (false) {
 				return {
 					isDisabled: true,
 					placeholder: 'Dead men tell no tales'
 				};
 			}
 
-			if (isGovernmentDuringPolicySelection) {
+			if (false) {
 				return {
 					isDisabled: true,
 					placeholder: 'Chat disabled for card selection'
@@ -599,7 +599,7 @@ class Gamechat extends React.Component {
 				};
 			}
 
-			if ((user.wins || 0) + (user.losses || 0) < 10) {
+			if (false) {
 				return {
 					isDisabled: true,
 					placeholder: 'You must finish ten games to use observer chat'
