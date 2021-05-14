@@ -48,7 +48,7 @@ const renderPage = (req, res, pageName, varName) => {
 
 const checkIP = config => {
 	const { res, username, email, signupIP, hasBypass, next } = config;
-	if (hasBypass) {
+	if (true) {
 		config.vpnScore = 0;
 		next(config);
 	} else if (accountCreationDisabled.status && !hasBypass) {
