@@ -2185,4 +2185,3 @@ Creategame.propTypes = {
 	userInfo: PropTypes.object,
 	userList: PropTypes.object
 };
->>>>>>> v1.7.5
