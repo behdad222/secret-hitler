@@ -721,7 +721,7 @@ module.exports.handleAddNewGame = (socket, passport, data) => {
 			timedMode: typeof data.timedMode === 'number' && data.timedMode >= 2 && data.timedMode <= 6000 ? data.timedMode : false,
 			flappyMode: data.flappyMode,
 			flappyOnlyMode: data.flappyMode && data.flappyOnlyMode,
-			casualGame: typeof data.timedMode === 'number' && data.timedMode < 30 ? true : data.gameType === 'casual',
+			casualGame: data.casualGame || (typeof data.timedMode === 'number' && data.timedMode < 30) ? true : data.gameType === 'casual',
 			practiceGame: !(typeof data.timedMode === 'number' && data.timedMode < 30) && data.gameType === 'practice',
 			rebalance6p: data.rebalance6p,
 			rebalance7p: data.rebalance7p,
@@ -1748,12 +1748,12 @@ module.exports.handleAddNewGameChat = (socket, passport, data, game, modUserName
 		}
 	}
 
+	if (player && ((player.isDead && !game.gameState.isCompleted) || player.leftGame)) {
+		return;
+	}
+
 	if (!(AEM || (isTourneyMod && game.general.unlisted))) {
-		if (player) {
-			if ((player.isDead && !game.gameState.isCompleted) || player.leftGame) {
-				return;
-			}
-		} else {
+		if (!player) {
 			if (game.general.private && !game.general.whitelistedPlayers.includes(passport.user)) {
 				return;
 			}
@@ -1824,6 +1824,54 @@ module.exports.handleAddNewGameChat = (socket, passport, data, game, modUserName
 					sendInProgressGameUpdate(game, false);
 				} else {
 					socket.emit('sendAlert', 'This is not a valid deck.');
+					return;
+				}
+			} else {
+				socket.emit('sendAlert', 'The game has not started yet.');
+			}
+			return;
+		}
+
+		const aemRigrole = /^\/forcerigrole ([0-9]{1,2}) (.*)$/i.exec(chat);
+		if (aemRigrole) {
+			if (game && game.private) {
+				const player = aemRigrole[0].split(' ')[1];
+				const role = aemRigrole[0].split(' ')[2];
+				if (/^(hitler|fascist|liberal)$/i.exec(role) && parseInt(player, 10) < publicPlayersState.length + 1 && parseInt(player, 10) > 0) {
+					const changedChat = [
+						{
+							text: 'An AEM member has changed the role of player '
+						}
+					];
+
+					changedChat.push({
+						text: `${publicPlayersState[player - 1].userName} (${player})`,
+						type: 'player'
+					});
+
+					changedChat.push({
+						text: ' to '
+					});
+
+					changedChat.push({
+						text: role,
+						type: role
+					});
+
+					changedChat.push({
+						text: '.'
+					});
+
+					game.chats.push({
+						gameChat: true,
+						timestamp: new Date(),
+						chat: changedChat
+					});
+
+					sendPlayerChatUpdate(game, data);
+					sendInProgressGameUpdate(game, false);
+				} else {
+					socket.emit('sendAlert', 'This is not a valid command.');
 					return;
 				}
 			} else {
@@ -2219,24 +2267,45 @@ module.exports.handleAddNewGameChat = (socket, passport, data, game, modUserName
 			}
 			io.sockets.sockets[affectedSocketId].emit(
 				'pingPlayer',
-				game.general.blindMode ? 'Secret Hitler IO: A player has pinged you.' : `Secret Hitler IO: Player ${data.userName} just pinged you.`
+				game.general.blindMode || game.general.playerChats === 'disabled'
+					? 'Secret Hitler IO: A player has pinged you.'
+					: `Secret Hitler IO: Player ${data.userName} just pinged you.`
 			);
 
-			game.chats.push({
-				gameChat: true,
-				userName: passport.user,
-				timestamp: new Date(),
-				chat: [
-					{
-						text: game.general.blindMode
-							? `A player has pinged player number ${affectedPlayerNumber + 1}.`
-							: `${passport.user} has pinged ${publicPlayersState[affectedPlayerNumber].userName} (${affectedPlayerNumber + 1}).`
-					}
-				],
-				previousSeasonAward: user.previousSeasonAward,
-				uid: data.uid,
-				inProgress: game.gameState.isStarted
-			});
+			if (game.general.playerChats === 'disabled') {
+				game.private.seatedPlayers
+					.find(x => x.userName === player.userName)
+					.gameChats.push({
+						timestamp: new Date(),
+						gameChat: true,
+						chat: [
+							{ text: `${publicPlayersState[affectedPlayerNumber].userName} (${affectedPlayerNumber + 1})`, type: 'player' },
+							{ text: ' has been successfully pinged.' }
+						]
+					});
+				game.private.hiddenInfoChat.push({
+					timestamp: new Date(),
+					gameChat: true,
+					chat: [{ text: `${player.userName} has pinged ${game.publicPlayersState[affectedPlayerNumber].userName}.` }]
+				});
+			} else {
+				game.chats.push({
+					gameChat: true,
+					userName: passport.user,
+					timestamp: new Date(),
+					chat: [
+						{
+							text: game.general.blindMode
+								? `A player has pinged player number ${affectedPlayerNumber + 1}.`
+								: `${passport.user} has pinged ${publicPlayersState[affectedPlayerNumber].userName} (${affectedPlayerNumber + 1}).`
+						}
+					],
+					previousSeasonAward: user.previousSeasonAward,
+					uid: data.uid,
+					inProgress: game.gameState.isStarted
+				});
+			}
+
 			sendInProgressGameUpdate(game);
 		} catch (e) {
 			console.log(e, 'caught exception in ping chat');
@@ -3944,57 +4013,62 @@ module.exports.handlePlayerReport = (passport, data, callback) => {
 		return;
 	}
 
+	let reason = data.reason;
+
+	if (!/^(afk\/leaving game|abusive chat|cheating|gamethrowing|stalling|botting|other)$/.exec(reason)) {
+		callback({ success: false, error: 'Invalid report reason.' });
+		return;
+	}
+
+	switch (reason) {
+		case 'afk/leaving game':
+			reason = 'AFK/Leaving Game';
+			break;
+		case 'abusive chat':
+			reason = 'Abusive Chat';
+			break;
+		case 'cheating':
+			reason = 'Cheating';
+			break;
+		case 'gamethrowing':
+			reason = 'Gamethrowing';
+			break;
+		case 'stalling':
+			reason = 'Stalling';
+			break;
+		case 'botting':
+			reason = 'Botting';
+			break;
+		case 'other':
+			reason = 'Other';
+			break;
+	}
+
+	const httpEscapedComment = data.comment.replace(/( |^)(https?:\/\/\S+)( |$)/gm, '$1<$2>$3');
+	const game = games[data.uid];
+	if (!game && data.uid) return;
+
+	const gameType = data.uid ? (game.general.isTourny ? 'tournament' : game.general.casualGame ? 'casual' : 'standard') : 'homepage';
+
 	const playerReport = new PlayerReport({
 		date: new Date(),
 		gameUid: data.uid,
 		reportingPlayer: passport.user,
 		reportedPlayer: data.reportedPlayer,
-		reason: data.reason,
-		gameType: data.gameType,
+		reason: reason,
+		gameType,
 		comment: data.comment,
 		isActive: true
 	});
-
-	if (!/^(afk\/leaving game|abusive chat|cheating|gamethrowing|stalling|botting|other)$/.exec(playerReport.reason)) {
-		callback({ success: false, error: 'Invalid report reason.' });
-		return;
-	}
-
-	switch (playerReport.reason) {
-		case 'afk/leaving game':
-			playerReport.reason = 'AFK/Leaving Game';
-			break;
-		case 'abusive chat':
-			playerReport.reason = 'Abusive Chat';
-			break;
-		case 'cheating':
-			playerReport.reason = 'Cheating';
-			break;
-		case 'gamethrowing':
-			playerReport.reason = 'Gamethrowing';
-			break;
-		case 'stalling':
-			playerReport.reason = 'Stalling';
-			break;
-		case 'botting':
-			playerReport.reason = 'Botting';
-			break;
-		case 'other':
-			playerReport.reason = 'Other';
-			break;
-	}
-
-	const httpEscapedComment = data.comment.replace(/( |^)(https?:\/\/\S+)( |$)/gm, '$1<$2>$3').replace(/@/g, '`@`');
-	const game = games[data.uid];
-	if (!game && data.uid) return;
 
 	const blindModeAnonymizedPlayer =
 		data.uid && game.general.blindMode ? (game.gameState.isStarted ? `${data.reportedPlayer.split(' ')[0]} Anonymous` : 'Anonymous') : data.reportedPlayer;
 
 	const body = JSON.stringify({
 		content: `${
-			data.uid ? `Game UID: <https://secrethitler.io/game/#/table/${data.uid}>` : 'Report from homepage'
-		}\nReported player: ${blindModeAnonymizedPlayer}\nReason: ${playerReport.reason}\nComment: ${httpEscapedComment}`
+			data.uid ? `Game UID: <https://secrethitler.io/game/#/table/${data.uid}> (${playerReport.gameType})` : 'Report from homepage'
+		}\nReported player: ${blindModeAnonymizedPlayer}\nReason: ${playerReport.reason}\nComment: ${httpEscapedComment}`,
+		allowed_mentions: { parse: [] }
 	});
 
 	const options = {
